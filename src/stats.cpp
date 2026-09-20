@@ -1,6 +1,8 @@
 #include "stats.h"
 #include <iostream>
+#include <fstream>
 #include <numeric>
+#include <iomanip>
 
 void TransferStats::start() {
     start_time = std::chrono::steady_clock::now();
@@ -43,12 +45,26 @@ void TransferStats::print_summary() const {
               << "Timeouts: " << timeouts << "\n"
               << "Duplicate ACKs: " << duplicate_acks << "\n"
               << "Out of Order: " << out_of_order << "\n"
-              << "Checksum Failures: " << checksum_failures << "\n"
-              << "------------------------\n";
+              << "Checksum Failures: " << checksum_failures << "\n";
+    if (adaptive_rto) {
+        std::cerr << "Adaptive RTO: ON\n"
+                  << "Final SRTT: " << final_srtt_ms << " ms\n"
+                  << "Final RTO: " << final_rto_ms << " ms\n";
+    }
+    if (cc_enabled) {
+        std::cerr << "Congestion Control: ON\n";
+        if (!cwnd_log.empty()) {
+            std::cerr << "Final cwnd: " << cwnd_log.back().cwnd << "\n"
+                      << "Final ssthresh: " << cwnd_log.back().ssthresh << "\n";
+        }
+    }
+    std::cerr << "------------------------\n";
 }
 
 void TransferStats::print_csv_header() {
-    std::cout << "mode,window,file_size,bytes_sent,packets_sent,retransmissions,timeouts,elapsed_s,throughput_kbps,avg_rtt_ms\n";
+    std::cout << "mode,window,file_size,bytes_sent,packets_sent,retransmissions,timeouts,"
+              << "elapsed_s,throughput_kbps,avg_rtt_ms,adaptive_rto,final_srtt_ms,final_rto_ms,"
+              << "cc_enabled\n";
 }
 
 void TransferStats::print_csv_row() const {
@@ -61,5 +77,30 @@ void TransferStats::print_csv_row() const {
               << timeouts << ","
               << elapsed_seconds() << ","
               << throughput_kbps() << ","
-              << avg_rtt_ms() << "\n";
+              << avg_rtt_ms() << ","
+              << (adaptive_rto ? 1 : 0) << ","
+              << final_srtt_ms << ","
+              << final_rto_ms << ","
+              << (cc_enabled ? 1 : 0) << "\n";
+}
+
+void TransferStats::write_rto_log(const std::string& filepath) const {
+    if (rtt_samples_ms.empty()) return;
+    std::ofstream f(filepath);
+    if (!f) return;
+    f << "sample_index,rtt_ms\n";
+    for (size_t i = 0; i < rtt_samples_ms.size(); ++i) {
+        f << i << "," << std::fixed << std::setprecision(3) << rtt_samples_ms[i] << "\n";
+    }
+}
+
+void TransferStats::write_cwnd_log(const std::string& filepath) const {
+    if (cwnd_log.empty()) return;
+    std::ofstream f(filepath);
+    if (!f) return;
+    f << "time_ms,cwnd,ssthresh\n";
+    for (const auto& s : cwnd_log) {
+        f << std::fixed << std::setprecision(3)
+          << s.time_ms << "," << s.cwnd << "," << s.ssthresh << "\n";
+    }
 }

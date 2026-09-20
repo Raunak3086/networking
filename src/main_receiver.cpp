@@ -14,6 +14,7 @@ void print_usage() {
               << "  --loss PERCENT     (0-100, default: 0)\n"
               << "  --dup PERCENT      (0-100, default: 0)\n"
               << "  --corrupt PERCENT  (0-100, default: 0)\n"
+              << "  --delay MS         (per-packet delay, default: 0)\n"
               << "  --seed N           (default: 0 = random)\n";
 }
 
@@ -33,6 +34,7 @@ int main(int argc, char** argv) {
     }
 
     double loss = 0, dup = 0, corrupt = 0;
+    uint32_t delay_ms = 0;
     uint32_t seed = 0;
     bool verbose = false;
     bool csv = false;
@@ -42,6 +44,7 @@ int main(int argc, char** argv) {
         if (arg == "--loss" && i + 1 < argc) loss = std::stod(argv[++i]) / 100.0;
         else if (arg == "--dup" && i + 1 < argc) dup = std::stod(argv[++i]) / 100.0;
         else if (arg == "--corrupt" && i + 1 < argc) corrupt = std::stod(argv[++i]) / 100.0;
+        else if (arg == "--delay" && i + 1 < argc) delay_ms = std::stoi(argv[++i]);
         else if (arg == "--seed" && i + 1 < argc) seed = std::stoi(argv[++i]);
         else if (arg == "--verbose") verbose = true;
         else if (arg == "--csv") csv = true;
@@ -52,7 +55,7 @@ int main(int argc, char** argv) {
     UdpSocket socket;
     socket.bind(port);
 
-    FaultConfig fcfg = {loss, dup, corrupt, seed};
+    FaultConfig fcfg = {loss, dup, corrupt, delay_ms, seed};
     socket.set_fault_injector(std::make_shared<FaultInjector>(fcfg));
 
     Receiver receiver(socket, output_dir);

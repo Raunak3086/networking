@@ -1,4 +1,6 @@
 #include "fault_injection.h"
+#include <thread>
+#include <chrono>
 
 FaultInjector::FaultInjector(const FaultConfig& config) : config_(config) {
     if (config_.seed == 0) {
@@ -10,7 +12,8 @@ FaultInjector::FaultInjector(const FaultConfig& config) : config_(config) {
 }
 
 bool FaultInjector::is_active() const {
-    return config_.loss_rate > 0.0 || config_.dup_rate > 0.0 || config_.corrupt_rate > 0.0;
+    return config_.loss_rate > 0.0 || config_.dup_rate > 0.0 || 
+           config_.corrupt_rate > 0.0 || config_.delay_ms > 0;
 }
 
 std::vector<std::vector<uint8_t>> FaultInjector::process(const std::vector<uint8_t>& packet) {
@@ -18,16 +21,22 @@ std::vector<std::vector<uint8_t>> FaultInjector::process(const std::vector<uint8
         return {packet};
     }
 
+    // Apply delay if configured
+    if (config_.delay_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(config_.delay_ms));
+        delayed_++;
+    }
+
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
     // Check for drop
-    if (dist(rng_) < config_.loss_rate) {
+    if (config_.loss_rate > 0.0 && dist(rng_) < config_.loss_rate) {
         dropped_++;
         return {};
     }
 
     // Check for duplication
-    bool dup = (dist(rng_) < config_.dup_rate);
+    bool dup = (config_.dup_rate > 0.0 && dist(rng_) < config_.dup_rate);
     int copies = dup ? 2 : 1;
     if (dup) duplicated_++;
 
@@ -35,7 +44,7 @@ std::vector<std::vector<uint8_t>> FaultInjector::process(const std::vector<uint8
     for (int i = 0; i < copies; i++) {
         std::vector<uint8_t> pkt = packet;
         // Check for corruption
-        if (dist(rng_) < config_.corrupt_rate) {
+        if (config_.corrupt_rate > 0.0 && dist(rng_) < config_.corrupt_rate) {
             corrupted_++;
             if (!pkt.empty()) {
                 std::uniform_int_distribution<size_t> byte_dist(0, pkt.size() - 1);
@@ -52,3 +61,4 @@ std::vector<std::vector<uint8_t>> FaultInjector::process(const std::vector<uint8
 uint64_t FaultInjector::packets_dropped() const { return dropped_; }
 uint64_t FaultInjector::packets_duplicated() const { return duplicated_; }
 uint64_t FaultInjector::packets_corrupted() const { return corrupted_; }
+uint64_t FaultInjector::packets_delayed() const { return delayed_; }

@@ -19,6 +19,7 @@ private:
     struct BufferedPacket {
         std::vector<uint8_t> data;  // Raw packet bytes
         std::chrono::steady_clock::time_point send_time;
+        bool retransmitted = false;  // Karn's algorithm: track if retransmitted
     };
     
     std::mutex mtx_;

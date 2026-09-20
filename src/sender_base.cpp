@@ -15,8 +15,13 @@
 #include <arpa/inet.h>
 #endif
 
-SenderBase::SenderBase(UdpSocket& socket, uint32_t timeout_ms, uint32_t window_size)
-    : socket_(socket), timeout_ms_(timeout_ms), window_size_(window_size) {
+SenderBase::SenderBase(UdpSocket& socket, uint32_t timeout_ms, uint32_t window_size,
+                       bool adaptive_rto, bool cc_enabled)
+    : socket_(socket), timeout_ms_(timeout_ms), window_size_(window_size),
+      adaptive_rto_(adaptive_rto) {
+    if (cc_enabled) {
+        congestion_ctrl_.enable();
+    }
 }
 
 bool SenderBase::send_file(const std::string& filepath) {
@@ -24,7 +29,7 @@ bool SenderBase::send_file(const std::string& filepath) {
     
     std::filesystem::path p(filepath);
     if (!std::filesystem::exists(p)) {
-        // Log error
+        LOG_ERROR("File not found: %s", filepath.c_str());
         return false;
     }
     
@@ -33,6 +38,8 @@ bool SenderBase::send_file(const std::string& filepath) {
     
     stats_.file_size = file_size;
     stats_.window_size = window_size_;
+    stats_.adaptive_rto = adaptive_rto_;
+    stats_.cc_enabled = congestion_ctrl_.is_enabled();
     
     if (!perform_handshake(filename, file_size)) {
         return false;
@@ -52,11 +59,48 @@ bool SenderBase::send_file(const std::string& filepath) {
     }
     
     stats_.stop();
+    
+    // Record final RTT estimator state
+    if (adaptive_rto_ && rtt_estimator_.has_samples()) {
+        stats_.final_srtt_ms = rtt_estimator_.get_srtt_ms();
+        stats_.final_rto_ms = rtt_estimator_.get_rto_ms();
+    }
+    
+    // Record congestion control log
+    if (congestion_ctrl_.is_enabled()) {
+        stats_.cwnd_log = congestion_ctrl_.get_cwnd_log();
+    }
+    
     return true;
 }
 
+uint32_t SenderBase::get_effective_timeout() const {
+    if (adaptive_rto_ && rtt_estimator_.has_samples()) {
+        return static_cast<uint32_t>(rtt_estimator_.get_rto_ms());
+    }
+    return timeout_ms_;
+}
+
+uint32_t SenderBase::get_effective_window() const {
+    if (congestion_ctrl_.is_enabled()) {
+        uint32_t cwnd = congestion_ctrl_.get_cwnd();
+        return std::min(window_size_, cwnd);
+    }
+    return window_size_;
+}
+
+void SenderBase::record_rtt_sample(double rtt_ms) {
+    stats_.rtt_samples_ms.push_back(rtt_ms);
+    if (adaptive_rto_) {
+        rtt_estimator_.add_sample(rtt_ms);
+        LOG_VERBOSE("[RTT] sample=%.1f srtt=%.1f rttvar=%.1f rto=%.1f",
+                    rtt_ms, rtt_estimator_.get_srtt_ms(),
+                    rtt_estimator_.get_rttvar_ms(), rtt_estimator_.get_rto_ms());
+    }
+}
+
 bool SenderBase::recv_response(PacketHeader& header, std::vector<uint8_t>& recv_buf, int timeout_override_ms) {
-    int current_timeout = timeout_override_ms >= 0 ? timeout_override_ms : timeout_ms_;
+    int current_timeout = timeout_override_ms >= 0 ? timeout_override_ms : static_cast<int>(get_effective_timeout());
     socket_.set_recv_timeout(current_timeout);
     
     sockaddr_in sender_addr;

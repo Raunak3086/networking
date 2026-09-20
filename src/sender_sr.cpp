@@ -10,7 +10,8 @@ bool SenderSR::send_data(std::ifstream& file, uint64_t file_size) {
         std::unique_lock<std::mutex> lock(mtx_);
         
         cv_send_.wait(lock, [this]() {
-            return (next_seq_ < base_ + window_size_ && !all_data_read_) || transfer_done_ || transfer_error_;
+            uint32_t eff_window = get_effective_window();
+            return (next_seq_ < base_ + eff_window && !all_data_read_) || transfer_done_ || transfer_error_;
         });
         
         if (transfer_done_ || transfer_error_) break;
@@ -54,13 +55,49 @@ void SenderSR::ack_thread_func() {
                 auto it = window_.find(header.sequence_number);
                 if (it != window_.end() && !it->second.acked) {
                     it->second.acked = true;
+                    
+                    // Karn's algorithm: only sample non-retransmitted packets
                     if (it->second.retries == 0) {
-                        double rtt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - it->second.send_time).count();
-                        stats_.rtt_samples_ms.push_back(rtt);
+                        double rtt = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - it->second.send_time).count();
+                        record_rtt_sample(rtt);
                     }
+                    
+                    // Congestion control: on ACK
+                    if (congestion_ctrl_.is_enabled()) {
+                        double elapsed = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - stats_.start_time).count();
+                        congestion_ctrl_.on_ack(elapsed);
+                    }
+                    
                     slide_window();
                     cv_send_.notify_all();
                     cv_timer_.notify_all();
+                } else if (it == window_.end() && header.sequence_number < base_) {
+                    // Duplicate ACK (already acked packet)
+                    if (congestion_ctrl_.is_enabled()) {
+                        double elapsed = std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - stats_.start_time).count();
+                        congestion_ctrl_.on_dup_ack(elapsed);
+                        
+                        // Fast retransmit on 3 dup ACKs
+                        if (congestion_ctrl_.should_fast_retransmit()) {
+                            // Retransmit the oldest unacked packet
+                            if (!window_.empty()) {
+                                auto first_unacked = window_.begin();
+                                if (!first_unacked->second.acked) {
+                                    auto data_copy = first_unacked->second.data;
+                                    first_unacked->second.retries++;
+                                    first_unacked->second.send_time = std::chrono::steady_clock::now();
+                                    stats_.retransmissions++;
+                                    socket_.send_packet(data_copy);
+                                }
+                            }
+                            congestion_ctrl_.exit_fast_recovery(
+                                std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - stats_.start_time).count());
+                        }
+                    }
                 }
             }
         }
@@ -79,10 +116,11 @@ void SenderSR::timer_thread_func() {
         auto earliest_deadline = std::chrono::steady_clock::time_point::max();
         uint32_t timeout_seq = 0;
         bool has_unacked = false;
+        uint32_t eff_timeout = get_effective_timeout();
         
         for (const auto& [seq, record] : window_) {
             if (!record.acked) {
-                auto deadline = record.send_time + std::chrono::milliseconds(timeout_ms_);
+                auto deadline = record.send_time + std::chrono::milliseconds(eff_timeout);
                 if (deadline < earliest_deadline) {
                     earliest_deadline = deadline;
                     timeout_seq = seq;
@@ -104,6 +142,17 @@ void SenderSR::timer_thread_func() {
                 it->second.send_time = std::chrono::steady_clock::now();
                 stats_.retransmissions++;
                 stats_.timeouts++;
+                
+                // Adaptive RTO: exponential backoff on timeout
+                if (adaptive_rto_) {
+                    rtt_estimator_.on_timeout();
+                }
+                // Congestion control: timeout
+                if (congestion_ctrl_.is_enabled()) {
+                    double elapsed = std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - stats_.start_time).count();
+                    congestion_ctrl_.on_timeout(elapsed);
+                }
                 
                 lock.unlock();
                 socket_.send_packet(data_copy);

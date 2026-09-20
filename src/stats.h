@@ -4,6 +4,7 @@
 #include <string>
 #include <mutex>
 #include <vector>
+#include "congestion_control.h"
 
 struct TransferStats {
     uint64_t bytes_sent = 0;
@@ -24,6 +25,15 @@ struct TransferStats {
     uint32_t window_size = 1;
     uint64_t file_size = 0;
     
+    // Phase 5: Adaptive RTO final state
+    bool adaptive_rto = false;
+    double final_srtt_ms = 0.0;
+    double final_rto_ms = 0.0;
+    
+    // Phase 6: Congestion control
+    bool cc_enabled = false;
+    std::vector<CwndSample> cwnd_log;
+    
     void start();
     void stop();
     double elapsed_seconds() const;
@@ -36,4 +46,10 @@ struct TransferStats {
     // Print CSV header and row to stdout
     static void print_csv_header();
     void print_csv_row() const;
+    
+    // Write RTO log to file (for plotting)
+    void write_rto_log(const std::string& filepath) const;
+    
+    // Write cwnd log to file (for plotting)
+    void write_cwnd_log(const std::string& filepath) const;
 };

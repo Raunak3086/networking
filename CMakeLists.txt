@@ -33,3 +33,21 @@ target_link_libraries(receiver reliable_udp_core)
 
 add_executable(test_packet tests/test_packet.cpp)
 target_link_libraries(test_packet reliable_udp_core)
+
+# TCP baseline for benchmarking (Phase 7)
+add_executable(tcp_sender scripts/tcp_sender.cpp)
+if(WIN32)
+    target_link_libraries(tcp_sender ws2_32)
+endif()
+
+add_executable(tcp_receiver scripts/tcp_receiver.cpp)
+if(WIN32)
+    target_link_libraries(tcp_receiver ws2_32)
+endif()
+
+# Custom test target
+add_custom_target(test
+    COMMAND $<TARGET_FILE:test_packet>
+    DEPENDS test_packet
+    COMMENT "Running unit tests"
+)
