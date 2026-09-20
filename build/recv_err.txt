@@ -1,0 +1,19 @@
+[21:53:45] [SYN] file=test_200kb.bin size=204800 mode=0 window=1
+[21:53:45] Received file E:\github\networking\build\output\test_200kb.bin successfully. SHA256: fd9e6626e672f62ad34e0a78536246c198ff2d053662e2e580a8018b5478ddee
+--- Transfer Summary ---
+Mode: SAW
+Window Size: 1
+File Size: 204800 bytes
+Time Elapsed: 0.0122163 s
+Throughput: 0 kbps
+Avg RTT: 0 ms
+Bytes Sent: 0
+Bytes Received: 206845
+Packets Sent: 0
+Packets Received: 202
+Retransmissions: 0
+Timeouts: 0
+Duplicate ACKs: 0
+Out of Order: 0
+Checksum Failures: 0
+------------------------
