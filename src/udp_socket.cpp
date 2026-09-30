@@ -1,8 +1,10 @@
 #include "udp_socket.h"
 #include "packet.h"
 #include "logger.h"
-#include <mutex>
 #include <iostream>
+
+#ifdef _WIN32
+#include <mutex>
 
 // SIO_UDP_CONNRESET may not be defined in all versions of mstcpip.h
 #ifndef SIO_UDP_CONNRESET
@@ -22,29 +24,39 @@ void UdpSocket::init_wsa() {
         std::atexit([]() { WSACleanup(); });
     });
 }
+#endif
 
 UdpSocket::UdpSocket() {
+#ifdef _WIN32
     init_wsa();
+#endif
     sock_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock_ == INVALID_SOCKET) {
         return;
     }
 
+#ifdef _WIN32
     // Apply SIO_UDP_CONNRESET fix to prevent WSAECONNRESET
     DWORD bytesReturned = 0;
     BOOL bNewBehavior = FALSE;
     WSAIoctl(sock_, SIO_UDP_CONNRESET, &bNewBehavior, sizeof(bNewBehavior),
              NULL, 0, &bytesReturned, NULL, NULL);
+#endif
 
     // Set 2MB buffers for sliding window
     int rcvbuf = 2 * 1024 * 1024;
+#ifdef _WIN32
     setsockopt(sock_, SOL_SOCKET, SO_RCVBUF, (const char*)&rcvbuf, sizeof(rcvbuf));
     setsockopt(sock_, SOL_SOCKET, SO_SNDBUF, (const char*)&rcvbuf, sizeof(rcvbuf));
+#else
+    setsockopt(sock_, SOL_SOCKET, SO_RCVBUF, &rcvbuf, sizeof(rcvbuf));
+    setsockopt(sock_, SOL_SOCKET, SO_SNDBUF, &rcvbuf, sizeof(rcvbuf));
+#endif
 }
 
 UdpSocket::~UdpSocket() {
     if (sock_ != INVALID_SOCKET) {
-        closesocket(sock_);
+        CLOSE_SOCKET(sock_);
     }
 }
 
@@ -57,7 +69,7 @@ UdpSocket::UdpSocket(UdpSocket&& other) noexcept
 UdpSocket& UdpSocket::operator=(UdpSocket&& other) noexcept {
     if (this != &other) {
         if (sock_ != INVALID_SOCKET) {
-            closesocket(sock_);
+            CLOSE_SOCKET(sock_);
         }
         sock_ = other.sock_;
         remote_addr_ = other.remote_addr_;
@@ -70,7 +82,11 @@ UdpSocket& UdpSocket::operator=(UdpSocket&& other) noexcept {
 
 void UdpSocket::bind(uint16_t port) {
     int opt = 1;
+#ifdef _WIN32
     setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+#else
+    setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
     sockaddr_in local_addr = {};
     local_addr.sin_family = AF_INET;
@@ -81,8 +97,15 @@ void UdpSocket::bind(uint16_t port) {
 }
 
 void UdpSocket::set_recv_timeout(uint32_t ms) {
+#ifdef _WIN32
     DWORD timeout = ms;
     setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout));
+#else
+    struct timeval tv;
+    tv.tv_sec = ms / 1000;
+    tv.tv_usec = (ms % 1000) * 1000;
+    setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+#endif
 }
 
 void UdpSocket::set_remote(const std::string& ip, uint16_t port) {
@@ -94,7 +117,11 @@ void UdpSocket::set_remote(const std::string& ip, uint16_t port) {
 }
 
 void UdpSocket::raw_send(const std::vector<uint8_t>& data, const sockaddr_in& addr) {
+#ifdef _WIN32
     sendto(sock_, (const char*)data.data(), (int)data.size(), 0, (const sockaddr*)&addr, sizeof(addr));
+#else
+    sendto(sock_, data.data(), data.size(), 0, (const sockaddr*)&addr, sizeof(addr));
+#endif
 }
 
 bool UdpSocket::send_packet(const std::vector<uint8_t>& packet) {
@@ -117,6 +144,7 @@ bool UdpSocket::send_packet_to(const std::vector<uint8_t>& packet, const sockadd
 
 int UdpSocket::recv_packet(std::vector<uint8_t>& buffer, sockaddr_in& sender_addr) {
     buffer.resize(MAX_PACKET_SIZE);
+#ifdef _WIN32
     int sender_len = sizeof(sender_addr);
     int bytes = recvfrom(sock_, (char*)buffer.data(), (int)buffer.size(), 0, (sockaddr*)&sender_addr, &sender_len);
 
@@ -127,6 +155,17 @@ int UdpSocket::recv_packet(std::vector<uint8_t>& buffer, sockaddr_in& sender_add
         }
         return -1;
     }
+#else
+    socklen_t sender_len = sizeof(sender_addr);
+    int bytes = recvfrom(sock_, (char*)buffer.data(), buffer.size(), 0, (sockaddr*)&sender_addr, &sender_len);
+
+    if (bytes == SOCKET_ERROR) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return 0;
+        }
+        return -1;
+    }
+#endif
 
     buffer.resize(bytes);
     return bytes;
@@ -136,6 +175,6 @@ void UdpSocket::set_fault_injector(std::shared_ptr<FaultInjector> injector) {
     fault_injector_ = std::move(injector);
 }
 
-SOCKET UdpSocket::handle() const {
+socket_t UdpSocket::handle() const {
     return sock_;
 }

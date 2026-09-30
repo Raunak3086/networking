@@ -1,4 +1,5 @@
 #include "../src/packet.h"
+#include "../src/sha256.h"
 #include <iostream>
 #include <cassert>
 #include <cstring>
@@ -118,6 +119,16 @@ void test_verify_checksum() {
     std::cout << "test_verify_checksum: PASS\n";
 }
 
+void test_sha256() {
+    std::string empty_hash = sha256_data(reinterpret_cast<const uint8_t*>(""), 0);
+    assert(empty_hash == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+
+    const char* abc = "abc";
+    std::string abc_hash = sha256_data(reinterpret_cast<const uint8_t*>(abc), 3);
+    assert(abc_hash == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+    std::cout << "test_sha256: PASS\n";
+}
+
 int main() {
     try {
         test_build_and_parse_data();
@@ -130,6 +141,7 @@ int main() {
         test_zero_payload();
         test_compute_checksum();
         test_verify_checksum();
+        test_sha256();
         std::cout << "ALL TESTS PASSED.\n";
         return 0;
     } catch (...) {
