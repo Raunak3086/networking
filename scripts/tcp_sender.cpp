@@ -1,3 +1,4 @@
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -7,13 +8,35 @@
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+
+using socket_t = SOCKET;
+#define CLOSE_SOCKET closesocket
+#define SHUT_SEND SD_SEND
+#define GET_SOCKET_ERR() std::to_string(WSAGetLastError())
+#else
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <unistd.h>
+#include <cerrno>
+#include <cstring>
+
+using socket_t = int;
+constexpr socket_t INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
+#define CLOSE_SOCKET close
+#define SHUT_SEND SHUT_WR
+#define GET_SOCKET_ERR() std::string(strerror(errno))
+#endif
+
 #include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <string>
-
-#pragma comment(lib, "ws2_32.lib")
 
 int main(int argc, char* argv[]) {
     if (argc < 4) {
@@ -33,36 +56,49 @@ int main(int argc, char* argv[]) {
     uint64_t file_size = static_cast<uint64_t>(file.tellg());
     file.seekg(0, std::ios::beg);
 
+#ifdef _WIN32
     WSADATA wsa;
     if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) {
         std::cerr << "WSAStartup failed: " << WSAGetLastError() << "\n";
         return 1;
     }
+#endif
 
     struct addrinfo hints = {}, *res = nullptr;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    if (getaddrinfo(host, port, &hints, &res) != 0) {
-        std::cerr << "getaddrinfo failed: " << WSAGetLastError() << "\n";
+    int gai_err = getaddrinfo(host, port, &hints, &res);
+    if (gai_err != 0) {
+        std::cerr << "getaddrinfo failed: " << gai_strerror(gai_err) << "\n";
+#ifdef _WIN32
         WSACleanup();
+#endif
         return 1;
     }
 
-    SOCKET sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    socket_t sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sock == INVALID_SOCKET) {
-        std::cerr << "Socket creation failed: " << WSAGetLastError() << "\n";
+        std::cerr << "Socket creation failed: " << GET_SOCKET_ERR() << "\n";
         freeaddrinfo(res);
+#ifdef _WIN32
         WSACleanup();
+#endif
         return 1;
     }
 
+#ifdef _WIN32
     if (connect(sock, res->ai_addr, static_cast<int>(res->ai_addrlen)) == SOCKET_ERROR) {
-        std::cerr << "Connect failed: " << WSAGetLastError() << "\n";
+#else
+    if (connect(sock, res->ai_addr, static_cast<socklen_t>(res->ai_addrlen)) == SOCKET_ERROR) {
+#endif
+        std::cerr << "Connect failed: " << GET_SOCKET_ERR() << "\n";
         freeaddrinfo(res);
-        closesocket(sock);
+        CLOSE_SOCKET(sock);
+#ifdef _WIN32
         WSACleanup();
+#endif
         return 1;
     }
     freeaddrinfo(res);
@@ -81,11 +117,17 @@ int main(int argc, char* argv[]) {
         const char* ptr = buffer;
         std::streamsize remaining = bytes_read;
         while (remaining > 0) {
+#ifdef _WIN32
             int sent = send(sock, ptr, static_cast<int>(remaining), 0);
+#else
+            ssize_t sent = send(sock, ptr, remaining, 0);
+#endif
             if (sent == SOCKET_ERROR) {
-                std::cerr << "Send failed: " << WSAGetLastError() << "\n";
-                closesocket(sock);
+                std::cerr << "Send failed: " << GET_SOCKET_ERR() << "\n";
+                CLOSE_SOCKET(sock);
+#ifdef _WIN32
                 WSACleanup();
+#endif
                 return 1;
             }
             ptr += sent;
@@ -94,9 +136,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    shutdown(sock, SD_SEND);
-    closesocket(sock);
+    shutdown(sock, SHUT_SEND);
+    CLOSE_SOCKET(sock);
+#ifdef _WIN32
     WSACleanup();
+#endif
 
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;

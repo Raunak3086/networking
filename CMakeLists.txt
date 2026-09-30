@@ -4,6 +4,8 @@ project(reliable_udp_core CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+find_package(Threads REQUIRED)
+
 if(MSVC)
     add_compile_options(/W4)
     add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX _CRT_SECURE_NO_WARNINGS)
@@ -26,10 +28,10 @@ if(WIN32)
 endif()
 
 add_executable(sender src/main_sender.cpp src/sender_base.cpp src/sender_saw.cpp src/sender_gbn.cpp src/sender_sr.cpp)
-target_link_libraries(sender reliable_udp_core)
+target_link_libraries(sender reliable_udp_core Threads::Threads)
 
 add_executable(receiver src/main_receiver.cpp src/receiver.cpp)
-target_link_libraries(receiver reliable_udp_core)
+target_link_libraries(receiver reliable_udp_core Threads::Threads)
 
 add_executable(test_packet tests/test_packet.cpp)
 target_link_libraries(test_packet reliable_udp_core)

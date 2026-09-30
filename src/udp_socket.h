@@ -1,4 +1,5 @@
 #pragma once
+#ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -8,6 +9,23 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <mstcpip.h>
+
+using socket_t = SOCKET;
+#define CLOSE_SOCKET closesocket
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <cerrno>
+
+using socket_t = int;
+constexpr socket_t INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
+#define CLOSE_SOCKET close
+#endif
+
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -48,14 +66,16 @@ public:
     void set_fault_injector(std::shared_ptr<FaultInjector> injector);
     
     // Get raw socket handle
-    SOCKET handle() const;
+    socket_t handle() const;
     
 private:
-    SOCKET sock_ = INVALID_SOCKET;
+    socket_t sock_ = INVALID_SOCKET;
     sockaddr_in remote_addr_ = {};
     bool remote_set_ = false;
     std::shared_ptr<FaultInjector> fault_injector_;
     
+#ifdef _WIN32
     static void init_wsa();
+#endif
     void raw_send(const std::vector<uint8_t>& data, const sockaddr_in& addr);
 };
