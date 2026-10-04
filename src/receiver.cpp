@@ -83,6 +83,20 @@ bool Receiver::receive_file() {
             
             std::filesystem::path p(output_dir_);
             p /= filename_;
+            
+            // Check if file exists to prevent data loss by overwriting
+            if (std::filesystem::exists(p)) {
+                std::string stem = p.stem().string();
+                std::string ext = p.extension().string();
+                int counter = 1;
+                while (std::filesystem::exists(p)) {
+                    std::string new_name = stem + "_" + std::to_string(counter) + ext;
+                    p = std::filesystem::path(output_dir_) / new_name;
+                    counter++;
+                }
+                filename_ = p.filename().string(); // update state so logs use correct name
+                LOG_INFO("File already exists. Saving as: %s", filename_.c_str());
+            }
             file.open(p.string(), std::ios::binary);
             if (!file.is_open()) {
                 LOG_ERROR("Failed to open file for writing: %s", p.string().c_str());
