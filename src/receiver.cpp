@@ -4,6 +4,7 @@
 #include <iostream>
 #include <filesystem>
 #include <cstring>
+<<<<<<< HEAD
 #include <algorithm>
 
 // Strip all directory separators and ".." components from a filename
@@ -30,6 +31,8 @@ static std::string sanitize_filename(const std::string& raw) {
 
     return result;
 }
+=======
+>>>>>>> 8520fd1c86fa3d85ce8d3ea002fd1d35b0681b23
 
 Receiver::Receiver(UdpSocket& socket, const std::string& output_dir)
     : socket_(socket), output_dir_(output_dir) {}
@@ -141,9 +144,12 @@ bool Receiver::handle_syn(const PacketHeader& header, const uint8_t* payload, ui
         filename_ = "unknown.bin";
     }
 
+<<<<<<< HEAD
     // Sanitize to prevent path-traversal attacks (e.g. "../../etc/passwd")
     filename_ = sanitize_filename(filename_);
 
+=======
+>>>>>>> 8520fd1c86fa3d85ce8d3ea002fd1d35b0681b23
     expected_seq_ = 0;
     rcv_base_ = 0;
     bytes_written_ = 0;
