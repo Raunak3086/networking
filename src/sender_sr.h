@@ -32,6 +32,7 @@ private:
     bool all_data_read_ = false;
     bool transfer_done_ = false;
     bool transfer_error_ = false;
+    static constexpr int MAX_RETRIES = 20;
     
     void ack_thread_func();
     void timer_thread_func();

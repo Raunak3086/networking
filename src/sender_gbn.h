@@ -32,6 +32,8 @@ private:
     bool transfer_done_ = false;
     bool transfer_error_ = false;
     std::chrono::steady_clock::time_point timer_deadline_;
+    uint32_t consecutive_timeouts_ = 0;  // Tracks timeouts without progress
+    static constexpr uint32_t MAX_CONSECUTIVE_TIMEOUTS = 20;
     
     void ack_thread_func();
     void resend_all_from_base();

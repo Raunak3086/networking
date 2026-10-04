@@ -38,6 +38,15 @@ bool SenderGBN::send_data(std::ifstream& file, uint64_t file_size) {
         
         if (!buffer_.empty()) {
             if (cv_.wait_until(lock, timer_deadline_) == std::cv_status::timeout) {
+                consecutive_timeouts_++;
+                if (consecutive_timeouts_ >= MAX_CONSECUTIVE_TIMEOUTS) {
+                    LOG_ERROR("GBN: %u consecutive timeouts without progress, aborting transfer.",
+                              MAX_CONSECUTIVE_TIMEOUTS);
+                    transfer_error_ = true;
+                    cv_.notify_all();
+                    break;
+                }
+                
                 resend_all_from_base();
                 stats_.timeouts++;
                 
@@ -88,6 +97,7 @@ void SenderGBN::ack_thread_func() {
                         buffer_.pop_front();
                     }
                     base_ = header.sequence_number;
+                    consecutive_timeouts_ = 0;  // Reset: connection is alive
                     
                     // Congestion control: on ACK
                     if (congestion_ctrl_.is_enabled()) {

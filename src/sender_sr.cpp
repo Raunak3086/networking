@@ -86,6 +86,14 @@ void SenderSR::ack_thread_func() {
                             if (!window_.empty()) {
                                 auto first_unacked = window_.begin();
                                 if (!first_unacked->second.acked) {
+                                    if (first_unacked->second.retries >= MAX_RETRIES) {
+                                        LOG_ERROR("SR: Max retries (%d) exceeded for seq %u during fast retransmit.", MAX_RETRIES, first_unacked->first);
+                                        transfer_error_ = true;
+                                        cv_send_.notify_all();
+                                        cv_timer_.notify_all();
+                                        break;
+                                    }
+                                    
                                     auto data_copy = first_unacked->second.data;
                                     first_unacked->second.retries++;
                                     first_unacked->second.send_time = std::chrono::steady_clock::now();
@@ -137,6 +145,14 @@ void SenderSR::timer_thread_func() {
         if (cv_timer_.wait_until(lock, earliest_deadline) == std::cv_status::timeout) {
             auto it = window_.find(timeout_seq);
             if (it != window_.end() && !it->second.acked) {
+                if (it->second.retries >= MAX_RETRIES) {
+                    LOG_ERROR("SR: Max retries (%d) exceeded for seq %u, aborting transfer.", MAX_RETRIES, timeout_seq);
+                    transfer_error_ = true;
+                    cv_send_.notify_all();
+                    cv_timer_.notify_all();
+                    break;
+                }
+                
                 auto data_copy = it->second.data; // Copy before unlock
                 it->second.retries++;
                 it->second.send_time = std::chrono::steady_clock::now();
