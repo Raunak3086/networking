@@ -4,7 +4,6 @@
 #include <iostream>
 #include <filesystem>
 #include <cstring>
-<<<<<<< HEAD
 #include <algorithm>
 
 // Strip all directory separators and ".." components from a filename
@@ -31,8 +30,6 @@ static std::string sanitize_filename(const std::string& raw) {
 
     return result;
 }
-=======
->>>>>>> 8520fd1c86fa3d85ce8d3ea002fd1d35b0681b23
 
 Receiver::Receiver(UdpSocket& socket, const std::string& output_dir)
     : socket_(socket), output_dir_(output_dir) {}
@@ -158,12 +155,9 @@ bool Receiver::handle_syn(const PacketHeader& header, const uint8_t* payload, ui
         filename_ = "unknown.bin";
     }
 
-<<<<<<< HEAD
     // Sanitize to prevent path-traversal attacks (e.g. "../../etc/passwd")
     filename_ = sanitize_filename(filename_);
 
-=======
->>>>>>> 8520fd1c86fa3d85ce8d3ea002fd1d35b0681b23
     expected_seq_ = 0;
     rcv_base_ = 0;
     bytes_written_ = 0;
@@ -224,7 +218,7 @@ bool Receiver::handle_data_gbn(const PacketHeader& header, const uint8_t* payloa
 bool Receiver::handle_data_sr(const PacketHeader& header, const uint8_t* payload, uint16_t payload_len, std::ofstream& file) {
     uint32_t seq = header.sequence_number;
 
-    if (seq >= rcv_base_ && seq < rcv_base_ + window_size_) {
+    if (seq - rcv_base_ < window_size_) {
         send_ack(PacketType::ACK, seq);
 
         if (seq == rcv_base_) {
@@ -238,7 +232,8 @@ bool Receiver::handle_data_sr(const PacketHeader& header, const uint8_t* payload
             sr_buffer_[seq] = std::vector<uint8_t>(payload, payload + payload_len);
             stats_.out_of_order++;
         }
-    } else if (seq < rcv_base_) {
+    } else if (seq - rcv_base_ >= 0x7FFFFFFF) {
+        // If (seq - rcv_base_) is a massive number, seq is in the past (duplicate)
         stats_.duplicate_acks++;
         send_ack(PacketType::ACK, seq);
     }

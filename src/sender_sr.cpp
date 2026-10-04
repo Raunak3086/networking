@@ -1,4 +1,5 @@
 #include "sender_sr.h"
+#include "logger.h"
 
 bool SenderSR::send_data(std::ifstream& file, uint64_t file_size) {
     stats_.mode = "SR";
@@ -11,7 +12,7 @@ bool SenderSR::send_data(std::ifstream& file, uint64_t file_size) {
         
         cv_send_.wait(lock, [this]() {
             uint32_t eff_window = get_effective_window();
-            return (next_seq_ < base_ + eff_window && !all_data_read_) || transfer_done_ || transfer_error_;
+            return (next_seq_ - base_ < eff_window && !all_data_read_) || transfer_done_ || transfer_error_;
         });
         
         if (transfer_done_ || transfer_error_) break;

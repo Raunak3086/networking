@@ -1,4 +1,5 @@
 #include "sender_gbn.h"
+#include "logger.h"
 
 bool SenderGBN::send_data(std::ifstream& file, uint64_t file_size) {
     stats_.mode = "GBN";
@@ -10,7 +11,7 @@ bool SenderGBN::send_data(std::ifstream& file, uint64_t file_size) {
         
         uint32_t eff_window = get_effective_window();
         
-        if (next_seq_ < base_ + eff_window && !all_data_read_) {
+        if (next_seq_ - base_ < eff_window && !all_data_read_) {
             uint32_t current_seq = next_seq_;
             lock.unlock(); // Release lock for expensive disk I/O and network send
 

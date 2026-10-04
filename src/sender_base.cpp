@@ -28,8 +28,8 @@ bool SenderBase::send_file(const std::string& filepath) {
     stats_.start();
     
     std::filesystem::path p(filepath);
-    if (!std::filesystem::exists(p)) {
-        LOG_ERROR("File not found: %s", filepath.c_str());
+    if (!std::filesystem::is_regular_file(p)) {
+        LOG_ERROR("Path does not exist or is not a regular file: %s", filepath.c_str());
         return false;
     }
     
