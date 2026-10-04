@@ -9,8 +9,8 @@ enum class PacketType : uint8_t {
 };
 
 constexpr size_t HEADER_SIZE = 10;
-constexpr size_t MAX_PAYLOAD_SIZE = 1024;
-constexpr size_t MAX_PACKET_SIZE = 1034;
+constexpr size_t MAX_PAYLOAD_SIZE = 1400;
+constexpr size_t MAX_PACKET_SIZE = 1410;
 
 struct PacketHeader {
     PacketType type;

@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
     }
 
     if (window == 0) {
-        window = (mode == "saw") ? 1 : 16;
+        window = (mode == "saw") ? 1 : 256;
     }
 
     Logger::set_level(verbose ? LogLevel::VERBOSE : LogLevel::NORMAL);
