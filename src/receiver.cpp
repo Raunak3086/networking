@@ -147,6 +147,13 @@ bool Receiver::handle_syn(const PacketHeader& header, const uint8_t* payload, ui
     
     window_size_ = (payload[8] << 8) | payload[9];
     
+    // Prevent Memory Exhaustion / DoS by capping the maximum accepted window size
+    constexpr uint16_t MAX_ALLOWED_WINDOW = 1024;
+    if (window_size_ > MAX_ALLOWED_WINDOW) {
+        LOG_VERBOSE("Requested window size %u is too large, capping at %u", window_size_, MAX_ALLOWED_WINDOW);
+        window_size_ = MAX_ALLOWED_WINDOW;
+    }
+    
     if (payload_len > 10) {
         filename_ = std::string(reinterpret_cast<const char*>(payload + 10), payload_len - 10);
         // Null-terminate string if it wasn't
