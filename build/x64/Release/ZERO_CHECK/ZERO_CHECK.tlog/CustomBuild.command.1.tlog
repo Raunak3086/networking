@@ -1,0 +1,10 @@
+^E:\GITHUB\NETWORKING\BUILD\CMAKEFILES\840E57F543F5F36917D010C3BEFF8C13\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SE:/github/networking -BE:/github/networking/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file E:/github/networking/build/reliable_udp_core.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
