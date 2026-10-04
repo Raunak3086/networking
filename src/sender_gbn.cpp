@@ -10,13 +10,22 @@ bool SenderGBN::send_data(std::ifstream& file, uint64_t file_size) {
         
         uint32_t eff_window = get_effective_window();
         
-        while (next_seq_ < base_ + eff_window && !all_data_read_) {
+        if (next_seq_ < base_ + eff_window && !all_data_read_) {
+            uint32_t current_seq = next_seq_;
+            lock.unlock(); // Release lock for expensive disk I/O and network send
+
+            bool read_success = false;
+            uint16_t bytes_read = 0;
             if (file.read(reinterpret_cast<char*>(payload_buf.data()), MAX_PAYLOAD_SIZE) || file.gcount() > 0) {
-                uint16_t bytes_read = static_cast<uint16_t>(file.gcount());
-                auto packet = build_packet(PacketType::DATA, get_mode_flag(), next_seq_, payload_buf.data(), bytes_read);
-                
+                bytes_read = static_cast<uint16_t>(file.gcount());
+                read_success = true;
+            }
+
+            if (read_success) {
+                auto packet = build_packet(PacketType::DATA, get_mode_flag(), current_seq, payload_buf.data(), bytes_read);
                 socket_.send_packet(packet);
                 
+                lock.lock(); // Reacquire to modify shared buffer state
                 if (buffer_.empty()) {
                     uint32_t eff_timeout = get_effective_timeout();
                     timer_deadline_ = std::chrono::steady_clock::now() + std::chrono::milliseconds(eff_timeout);
@@ -27,8 +36,10 @@ bool SenderGBN::send_data(std::ifstream& file, uint64_t file_size) {
                 stats_.bytes_sent += bytes_read;
                 next_seq_++;
             } else {
+                lock.lock(); // Reacquire to update completion state
                 all_data_read_ = true;
             }
+            continue; // Skip wait logic while actively filling the window
         }
         
         if (all_data_read_ && base_ == next_seq_) {

@@ -16,24 +16,33 @@ bool SenderSR::send_data(std::ifstream& file, uint64_t file_size) {
         
         if (transfer_done_ || transfer_error_) break;
         
+        uint32_t current_seq = next_seq_;
+        lock.unlock(); // Release lock for expensive disk I/O and network send
+        
+        bool read_success = false;
+        uint16_t bytes_read = 0;
         if (file.read(reinterpret_cast<char*>(payload_buf.data()), MAX_PAYLOAD_SIZE) || file.gcount() > 0) {
-            uint16_t bytes_read = static_cast<uint16_t>(file.gcount());
-            auto packet = build_packet(PacketType::DATA, get_mode_flag(), next_seq_, payload_buf.data(), bytes_read);
-            
+            bytes_read = static_cast<uint16_t>(file.gcount());
+            read_success = true;
+        }
+        
+        if (read_success) {
+            auto packet = build_packet(PacketType::DATA, get_mode_flag(), current_seq, payload_buf.data(), bytes_read);
             socket_.send_packet(packet);
             
-            window_[next_seq_] = {packet, std::chrono::steady_clock::now(), false, 0};
-            
+            lock.lock(); // Reacquire to modify shared window state
+            window_[current_seq] = {packet, std::chrono::steady_clock::now(), false, 0};
             stats_.packets_sent++;
             stats_.bytes_sent += bytes_read;
             next_seq_++;
-            
             cv_timer_.notify_one();
         } else {
+            lock.lock(); // Reacquire to update completion state
             all_data_read_ = true;
             if (window_.empty()) {
                 transfer_done_ = true;
                 cv_timer_.notify_all();
+                cv_send_.notify_all();
             }
         }
     }
