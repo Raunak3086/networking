@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reliable UDP Simulation Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .terminal {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            font-family: 'Courier New', Courier, monospace;
+            height: 400px;
+            overflow-y: auto;
+            padding: 10px;
+            border-radius: 0.5rem;
+            font-size: 0.85rem;
+        }
+        .log-sender { color: #569cd6; }
+        .log-receiver { color: #4ec9b0; }
+        .log-error { color: #f44747; }
+        .log-info { color: #dcdcaa; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen font-sans">
+    <div class="container mx-auto p-6 max-w-6xl">
+        <header class="mb-8 border-b border-gray-700 pb-4">
+            <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                Network Protocol Simulator
+            </h1>
+            <p class="text-gray-400 mt-2">Reliable Data Transfer (RDT) with Congestion Control</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Configuration Panel -->
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl lg:col-span-1">
+                <h2 class="text-xl font-semibold mb-4 text-gray-200 border-b border-gray-700 pb-2">Configuration</h2>
+                
+                <form id="configForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">File to Transfer</label>
+                        <select id="fileSelect" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm focus:ring-blue-500 focus:border-blue-500">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-1">Protocol Mode</label>
+                        <div class="flex space-x-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="mode" value="saw" class="form-radio text-blue-500" checked>
+                                <span class="ml-2 text-sm">Stop & Wait</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="mode" value="gbn" class="form-radio text-blue-500">
+                                <span class="ml-2 text-sm">GBN</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="mode" value="sr" class="form-radio text-blue-500">
+                                <span class="ml-2 text-sm">Selective Repeat</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Window Size</label>
+                            <input type="number" id="window" value="16" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-400 mb-1">Timeout (ms)</label>
+                            <input type="number" id="timeout" value="200" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h3 class="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700 pb-1">Network Faults</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Loss (%)</label>
+                                <input type="number" step="0.1" id="loss" value="0" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Corrupt (%)</label>
+                                <input type="number" step="0.1" id="corrupt" value="0" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Duplicate (%)</label>
+                                <input type="number" step="0.1" id="dup" value="0" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-400 mb-1">Delay (ms)</label>
+                                <input type="number" id="delay" value="0" class="w-full bg-gray-700 border border-gray-600 rounded p-2 text-sm">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h3 class="text-sm font-medium text-gray-300 mb-2 border-b border-gray-700 pb-1">Advanced Options</h3>
+                        <div class="flex flex-col space-y-2">
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" id="adaptive" class="form-checkbox text-blue-500 rounded bg-gray-700 border-gray-600">
+                                <span class="ml-2 text-sm">Adaptive RTO (RFC 6298)</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="checkbox" id="cc" class="form-checkbox text-blue-500 rounded bg-gray-700 border-gray-600">
+                                <span class="ml-2 text-sm">Congestion Control (TCP Reno)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 mt-4 border-t border-gray-700">
+                        <button type="button" id="startBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
+                            Start Simulation
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Visualization / Output Panel -->
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-xl lg:col-span-2 flex flex-col">
+                <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                    <h2 class="text-xl font-semibold text-gray-200">Live Execution Output</h2>
+                    <span id="statusIndicator" class="px-2 py-1 bg-gray-700 text-gray-300 rounded text-xs font-semibold uppercase">Idle</span>
+                </div>
+                
+                <!-- Metrics summary (initially hidden) -->
+                <div id="metrics" class="grid grid-cols-4 gap-4 mb-4 hidden">
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Throughput</div>
+                        <div id="metricThroughput" class="text-lg font-bold text-emerald-400">0 kbps</div>
+                    </div>
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Avg RTT</div>
+                        <div id="metricRtt" class="text-lg font-bold text-blue-400">0 ms</div>
+                    </div>
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Retransmits</div>
+                        <div id="metricRetrans" class="text-lg font-bold text-red-400">0</div>
+                    </div>
+                    <div class="bg-gray-900 p-3 rounded border border-gray-700 text-center">
+                        <div class="text-xs text-gray-500 uppercase">Time</div>
+                        <div id="metricTime" class="text-lg font-bold text-yellow-400">0s</div>
+                    </div>
+                </div>
+
+                <div class="flex-grow terminal" id="terminal">
+                    <div class="text-gray-500 italic">Logs will appear here once simulation starts...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        const terminal = document.getElementById('terminal');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const startBtn = document.getElementById('startBtn');
+        const fileSelect = document.getElementById('fileSelect');
+
+        // Fetch available files
+        fetch('/api/files')
+            .then(res => res.json())
+            .then(files => {
+                fileSelect.innerHTML = files.map(f => `<option value="${f}">${f}</option>`).join('');
+            });
+
+        function appendLog(text, typeClass) {
+            const div = document.createElement('div');
+            div.className = typeClass;
+            div.textContent = text;
+            terminal.appendChild(div);
+            terminal.scrollTop = terminal.scrollHeight;
+            
+            // Try to parse summary data if it's the sender output
+            if (text.includes("Transfer Stats")) {
+                document.getElementById('metrics').classList.remove('hidden');
+            }
+            if (text.includes("Throughput:")) {
+                const match = text.match(/Throughput:\s+([\d.]+)\s+kbps/);
+                if (match) document.getElementById('metricThroughput').innerText = match[1] + " kbps";
+            }
+            if (text.includes("Avg RTT:")) {
+                const match = text.match(/Avg RTT:\s+([\d.]+)\s+ms/);
+                if (match) document.getElementById('metricRtt').innerText = match[1] + " ms";
+            }
+            if (text.includes("Retransmissions:")) {
+                const match = text.match(/Retransmissions:\s+(\d+)/);
+                if (match) document.getElementById('metricRetrans').innerText = match[1];
+            }
+            if (text.includes("Elapsed Time:")) {
+                const match = text.match(/Elapsed Time:\s+([\d.]+)\s+s/);
+                if (match) document.getElementById('metricTime').innerText = match[1] + " s";
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+
+            terminal.innerHTML = '';
+            document.getElementById('metrics').classList.add('hidden');
+            
+            statusIndicator.textContent = 'RUNNING';
+            statusIndicator.className = 'px-2 py-1 bg-blue-900 text-blue-300 rounded text-xs font-semibold uppercase';
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const protocolMode = document.querySelector('input[name="mode"]:checked').value;
+
+            const params = {
+                file: fileSelect.value,
+                mode: protocolMode,
+                window: document.getElementById('window').value,
+                timeout: document.getElementById('timeout').value,
+                loss: document.getElementById('loss').value,
+                dup: document.getElementById('dup').value,
+                corrupt: document.getElementById('corrupt').value,
+                delay: document.getElementById('delay').value,
+                cc: document.getElementById('cc').checked,
+                adaptive: document.getElementById('adaptive').checked
+            };
+
+            const wsUrl = `ws://${window.location.host}/ws`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                ws.send(JSON.stringify({ action: "start", params: params }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === "status") {
+                    appendLog(`[SYSTEM] ${data.message}`, "log-info font-bold mt-2");
+                } 
+                else if (data.type === "log") {
+                    let typeClass = "";
+                    if (data.stream === "stderr") {
+                        if (data.source === "sender") typeClass = "log-sender";
+                        else typeClass = "log-receiver";
+                        
+                        if (data.message.includes("ERROR") || data.message.includes("failed")) {
+                            typeClass = "log-error font-bold";
+                        }
+                    } else {
+                        typeClass = "text-gray-300";
+                    }
+                    
+                    const prefix = data.source === "sender" ? "[SENDER]   " : "[RECEIVER] ";
+                    appendLog(`${prefix} ${data.message}`, typeClass);
+                }
+                else if (data.type === "done") {
+                    statusIndicator.textContent = 'COMPLETED';
+                    statusIndicator.className = 'px-2 py-1 bg-emerald-900 text-emerald-300 rounded text-xs font-semibold uppercase';
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            };
+
+            ws.onclose = () => {
+                if (statusIndicator.textContent === 'RUNNING') {
+                    statusIndicator.textContent = 'DISCONNECTED';
+                    statusIndicator.className = 'px-2 py-1 bg-red-900 text-red-300 rounded text-xs font-semibold uppercase';
+                    startBtn.disabled = false;
+                    startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                }
+            };
+        });
+    </script>
+</body>
+</html>
