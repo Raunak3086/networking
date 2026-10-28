@@ -1,0 +1,80 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# CMake files and directories
+build/
+build-*/
+out/
+bin/
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
+
+# Visual Studio files
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.sln.jfm
+*.vcxitems
+*.vcxitems.filters
+*.pdb
+*.idb
+*.ipdb
+*.iobj
+*.ilk
+*.aps
+*.ncb
+*.opendb
+*.db
+*.VC.db
+*.sdf
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Project-specific / Test files
+test_*.bin
+test_output/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+test_frontend.py
