@@ -73,3 +73,8 @@ Thumbs.db
 test_*.bin
 test_output/
 *.log
+
+# Python
+__pycache__/
+*.py[cod]
+test_frontend.py
