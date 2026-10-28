@@ -31,6 +31,7 @@
   - [8.1 Receiver Command Reference](#81-receiver-command-reference)
   - [8.2 Sender Command Reference](#82-sender-command-reference)
   - [8.3 TCP Baseline Benchmarks](#83-tcp-baseline-benchmarks)
+  - [8.4 Real-Time Web Simulation Dashboard](#84-real-time-web-simulation-dashboard-fastapi--tailwind-css)
 - [9. Verification, Quality Assurance \& Testing](#9-verification-quality-assurance--testing)
   - [9.1 White-Box Unit Testing](#91-white-box-unit-testing)
   - [9.2 Automated Integration Test Harness](#92-automated-integration-test-harness)
@@ -431,6 +432,30 @@ For scientific comparison against standard TCP:
 # Terminal 2 (Sender):
 ./tcp_sender 127.0.0.1 9999 large_file.bin
 ```
+
+### 8.4 Real-Time Web Simulation Dashboard (FastAPI & Tailwind CSS)
+For an interactive and visual experience, a modern web dashboard is available under the `frontend/` directory to configure scenarios and observe packet transfers in real time.
+
+#### Prerequisites:
+- Python 3.10+
+- `sender` and `receiver` binaries compiled and placed in the project root.
+
+#### Starting the Dashboard:
+```bash
+# 1. Navigate to frontend directory and install dependencies
+cd frontend
+pip install -r requirements.txt
+
+# 2. Launch the web server
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
+```
+Then open **`http://127.0.0.1:8000`** in your web browser.
+
+#### Features:
+- **Scenario Configuration:** Select payload file, ARQ mode (SAW, GBN, SR), window size, and timeouts.
+- **Chaos Fault Controls:** Form controls for loss %, duplication %, corruption %, and network delay.
+- **Advanced Flags:** One-click toggles for RFC 6298 Adaptive RTO and TCP Reno Congestion Control.
+- **Live Colored Logs & Metrics:** Real-time log streaming over WebSockets with automatic throughput, average RTT, retransmission count, and transfer time telemetry.
 
 ---
 
